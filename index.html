@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #121212;
+            color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px auto;
+            max-width: 1200px;
+        }
+        .box {
+            background-color: #1f1f1f;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        .box:hover {
+            transform: scale(1.05);
+        }
+        .box h2 {
+            margin: 0 0 10px;
+            color: #f4f4f9;
+        }
+        .status-text {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #bbb;
+        }
+        .button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+        }
+        .start {
+            background-color: #4CAF50;
+        }
+        .stop {
+            background-color: #f44336;
+        }
+        .restart {
+            background-color: #2196F3;
+        }
+        .status {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <h1>RDP Control Panel</h1>
+
+    <div class="container" id="rdpContainer"></div>
+
+    <div>
+        <button class="button start" onclick="sendBulkRequest('/start')">Start All</button>
+        <button class="button stop" onclick="sendBulkRequest('/stop')">Stop All</button>
+        <button class="button restart" onclick="sendBulkRequest('/restart')">Restart All</button>
+    </div>
+
+    <div class="status" id="status">Status: Waiting for action...</div>
+
+    <script>
+        let ipList = [];
+
+        async function loadIPAddresses() {
+            try {
+                const response = await fetch('ip.txt');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch IP addresses');
+                }
+                const ips = await response.text();
+                ipList = ips.split('\n').map(ip => ip.trim()).filter(ip => ip);
+
+                const container = document.getElementById('rdpContainer');
+                ipList.forEach((ip, index) => {
+                    const box = document.createElement('div');
+                    box.className = 'box';
+
+                    const title = document.createElement('h2');
+                    title.textContent = `RDP ${String(index + 1).padStart(2, '0')}`;
+
+                    const statusText = document.createElement('p');
+                    statusText.className = 'status-text';
+                    statusText.id = `status-${index}`;
+                    statusText.textContent = 'Status: Unknown';
+
+                    const startButton = document.createElement('button');
+                    startButton.className = 'button start';
+                    startButton.textContent = 'Start';
+                    startButton.onclick = () => sendRequest(ip, '/start', index);
+
+                    const stopButton = document.createElement('button');
+                    stopButton.className = 'button stop';
+                    stopButton.textContent = 'Stop';
+                    stopButton.onclick = () => sendRequest(ip, '/stop', index);
+
+                    const restartButton = document.createElement('button');
+                    restartButton.className = 'button restart';
+                    restartButton.textContent = 'Restart';
+                    restartButton.onclick = () => sendRequest(ip, '/restart', index);
+
+                    box.appendChild(title);
+                    box.appendChild(startButton);
+                    box.appendChild(stopButton);
+                    box.appendChild(restartButton);
+                    box.appendChild(statusText);
+
+                    container.appendChild(box);
+
+                    // Fetch and update status for each IP
+                    fetchStatus(ip, index);
+                });
+            } catch (error) {
+                document.getElementById('status').innerText = `Status: Error - ${error.message}`;
+            }
+        }
+
+        async function fetchStatus(ip, index) {
+            try {
+                const url = `http://${ip}:5000/status`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch status');
+                }
+                const data = await response.json();
+                if (data.status === "success") {
+                    const apiStatus = data.api_status || "unknown";
+                    const seleniumStatus = data.selenium_status || "unknown";
+                    document.getElementById(`status-${index}`).textContent = `API: ${apiStatus}, Selenium: ${seleniumStatus}`;
+                } else {
+                    document.getElementById(`status-${index}`).textContent = 'Status: Unavailable';
+                }
+            } catch (error) {
+                document.getElementById(`status-${index}`).textContent = 'Status: Error';
+            }
+        }
+
+        async function sendRequest(ip, endpoint, index) {
+            try {
+                const url = `http://${ip}:5000${endpoint}`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Request failed');
+                }
+                const data = await response.text();
+                document.getElementById('status').innerText = `Status: ${data}`;
+                fetchStatus(ip, index);
+            } catch (error) {
+                document.getElementById('status').innerText = `Status: Error - ${error.message}`;
+            }
+        }
+
+        async function sendBulkRequest(endpoint) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = 'Status: Sending requests...';
+
+            const promises = ipList.map(async (ip, index) => {
+                try {
+                    const url = `http://${ip}:5000${endpoint}`;
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed for ${ip}`);
+                    }
+                    fetchStatus(ip, index);
+                    return `Success for ${ip}`;
+                } catch (error) {
+                    return `Error for ${ip}: ${error.message}`;
+                }
+            });
+
+            const results = await Promise.all(promises);
+            statusDiv.innerText = `Status:\n${results.join('\n')}`;
+        }
+
+        // Load IP addresses when the page loads
+        document.addEventListener('DOMContentLoaded', loadIPAddresses);
+    </script>
+</body>
+</html>

@@ -133,40 +133,48 @@
             }
         }
 
-        async function fetchStatus(ip, index) {
-            try {
-                const url = `http://${ip}:5000/status`;
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch status');
-                }
-                const data = await response.json();
-                if (data.status === "success") {
-                    const apiStatus = data.api_status || "unknown";
-                    const seleniumStatus = data.selenium_status || "unknown";
-                    document.getElementById(`status-${index}`).textContent = `API: ${apiStatus}, Selenium: ${seleniumStatus}`;
-                } else {
-                    document.getElementById(`status-${index}`).textContent = 'Status: Unavailable';
-                }
-            } catch (error) {
-                document.getElementById(`status-${index}`).textContent = 'Status: Error';
-            }
-        }
+async function fetchStatus(ip, index) {
+    try {
+        // Menampilkan indikator 'Starting... Please wait...'
+        document.getElementById(`status-${index}`).textContent = 'Status: Starting... Please wait...';
 
-        async function sendRequest(ip, endpoint, index) {
-            try {
-                const url = `http://${ip}:5000${endpoint}`;
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error('Request failed');
-                }
-                const data = await response.text();
-                document.getElementById('status').innerText = `Status: ${data}`;
-                fetchStatus(ip, index);
-            } catch (error) {
-                document.getElementById('status').innerText = `Status: Error - ${error.message}`;
-            }
+        const url = `http://${ip}:5000/status`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Failed to fetch status');
         }
+        const data = await response.json();
+        if (data.status === "success") {
+            const apiStatus = data.api_status || "unknown";
+            const seleniumStatus = data.selenium_status || "unknown";
+            document.getElementById(`status-${index}`).textContent = `API: ${apiStatus}, Selenium: ${seleniumStatus}`;
+        } else {
+            document.getElementById(`status-${index}`).textContent = 'Status: Unavailable';
+        }
+    } catch (error) {
+        document.getElementById(`status-${index}`).textContent = 'Status: Error';
+    }
+}
+
+async function sendRequest(ip, endpoint, index) {
+    try {
+        // Menampilkan indikator 'Please wait...'
+        document.getElementById(`status-${index}`).textContent = 'Status: Please wait...';
+
+        const url = `http://${ip}:5000${endpoint}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Request failed');
+        }
+        const data = await response.text();
+        document.getElementById('status').innerText = `Status: ${data}`;
+
+        // Memperbarui status setelah menerima respon
+        fetchStatus(ip, index);
+    } catch (error) {
+        document.getElementById('status').innerText = `Status: Error - ${error.message}`;
+    }
+}
 
         async function sendBulkRequest(endpoint) {
             const statusDiv = document.getElementById('status');
